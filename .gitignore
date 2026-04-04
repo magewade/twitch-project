@@ -1,0 +1,13 @@
+# env
+.env
+.venv/
+
+# python
+__pycache__/
+*.pyc
+
+# jupyter
+.ipynb_checkpoints/
+
+# mac
+.DS_Store
