@@ -127,12 +127,20 @@ def transform_streams_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         transformed["viewer_count_delta"] = (
             transformed["viewer_count"] - transformed["previous_viewer_count"]
         ).fillna(0)
+        transformed["viewer_count_delta"] = pd.to_numeric(
+            transformed["viewer_count_delta"], errors="coerce"
+        ).fillna(0.0)
 
-        previous_non_zero = transformed["previous_viewer_count"].replace(0, pd.NA)
+        previous_non_zero = pd.to_numeric(
+            transformed["previous_viewer_count"], errors="coerce"
+        ).replace(0, float("nan"))
         transformed["viewer_count_pct_change"] = (
-            (transformed["viewer_count_delta"].div(previous_non_zero).mul(100))
+            transformed["viewer_count_delta"]
+            .div(previous_non_zero)
+            .mul(100)
+            .fillna(0.0)
+            .astype(float)
             .round(2)
-            .fillna(0)
         )
         transformed["viewer_trend"] = transformed["viewer_count_delta"].apply(
             lambda value: "up" if value > 0 else "down" if value < 0 else "stable"
