@@ -1,6 +1,7 @@
 # env
 .env
 .venv/
+.vscode/
 
 # python
 __pycache__/
@@ -11,3 +12,15 @@ __pycache__/
 
 # mac
 .DS_Store
+
+# airflow / docker generated
+logs/
+airflow-webserver.pid
+standalone_admin_password.txt
+config/airflow.cfg
+
+# generated data artifacts
+data/processed/*.csv
+data/raw/*.csv
+data/analytics/*.csv
+top_games_raw.json
