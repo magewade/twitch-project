@@ -124,9 +124,13 @@ data/analytics/
 
 Generated outputs include:
 - `top_games_summary.csv`
+- `streamer_summary.csv`
 - `language_summary.csv`
+- `language_hourly_summary.csv`
+- `game_hourly_summary.csv`
 - `hourly_summary.csv`
 - `maturity_summary.csv`
+- `collection_health_summary.csv`
 - `fastest_growing_streams.csv`
 
 ### 4) `clickhouse_load` — store the latest analytical batch in ClickHouse
@@ -159,7 +163,9 @@ twitch-project/
 │   ├── processed/                # cleaned and enriched dataset
 │   └── analytics/                # BI-ready aggregate tables
 ├── notebooks/
-│   └── scouting_notebook.ipynb   # optional exploration notebook
+│   ├── clickhouse_playground.ipynb # ClickHouse connection and SQL exploration
+│   ├── twitch_analytics.ipynb     # descriptive analytics and visualization
+│   └── scouting_notebook.ipynb    # earlier exploration notebook
 ├── config/
 │   └── airflow.cfg
 ├── docker-compose.yaml           # local Airflow stack
@@ -304,9 +310,13 @@ The CSV outputs are immediately useful for BI dashboards or a lightweight hosted
 | Output file | What it shows | Typical visualization |
 |------------|----------------|-----------------------|
 | `top_games_summary.csv` | Average and peak viewers by game | bar chart / leaderboard |
+| `streamer_summary.csv` | Per-streamer coverage, peaks, and observation window | leaderboard / profile table |
 | `language_summary.csv` | Stream performance by language | bar chart / treemap |
+| `language_hourly_summary.csv` | How language audiences change across UTC hours | multi-line chart |
+| `game_hourly_summary.csv` | How top games move across UTC hours | multi-line chart |
 | `hourly_summary.csv` | Viewer activity by UTC hour | line chart |
 | `maturity_summary.csv` | Audience comparison by maturity flag | comparison bar chart |
+| `collection_health_summary.csv` | Batch size and collection quality over time | monitoring / line chart |
 | `fastest_growing_streams.csv` | Biggest positive changes in viewers | highlight table |
 
 These files live in:
@@ -316,6 +326,10 @@ data/analytics/
 ```
 
 The ClickHouse table is useful for SQL-based exploration, validation queries, and later direct BI connections.
+
+Notebook split:
+- `notebooks/clickhouse_playground.ipynb` demonstrates ClickHouse connectivity, SQL queries, and Pandas reads from ClickHouse.
+- `notebooks/twitch_analytics.ipynb` demonstrates descriptive analysis and charts built from the processed dataset and analytics CSV layer.
 
 ---
 
