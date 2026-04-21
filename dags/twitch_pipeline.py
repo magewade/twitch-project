@@ -12,6 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 from src.extract import collect_and_store_streams_snapshot
+from src.clickhouse_loader import load_latest_batch_to_clickhouse
 from src.load import load_analytics_outputs
 from src.transform import transform_raw_snapshots
 
@@ -64,4 +65,19 @@ with DAG(
         },
     )
 
-    collect_streams_to_csv >> transform_streams_csv >> build_analytics_outputs
+    load_processed_to_clickhouse = PythonOperator(
+        task_id="load_processed_to_clickhouse",
+        python_callable=load_latest_batch_to_clickhouse,
+        op_kwargs={
+            "input_path": str(
+                PROJECT_ROOT / "data" / "processed" / "twitch_streams_enriched.csv"
+            ),
+        },
+    )
+
+    (
+        collect_streams_to_csv
+        >> transform_streams_csv
+        >> build_analytics_outputs
+        >> load_processed_to_clickhouse
+    )

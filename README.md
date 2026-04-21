@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/License-MIT-success?style=for-the-badge" alt="MIT License" />
 </p>
 
-> A **data engineering project** that collects live Twitch stream data from the **Twitch Helix API**, processes it with **Python + Pandas**, orchestrates the workflow in **Apache Airflow**, and publishes **analytics-ready CSV tables** for tools like **Tableau**.
+> A **data engineering project** that collects live Twitch stream data from the **Twitch Helix API**, processes it with **Python + Pandas**, orchestrates the workflow in **Apache Airflow**, stores the latest analytical batch in **ClickHouse**, and publishes **analytics-ready outputs** for downstream BI and dashboarding.
 
 ## 📌 Project snapshot
 
@@ -42,22 +42,27 @@ The goal of the project is to answer questions like:
 flowchart LR
     A[🎥 Twitch Helix API] --> B[📥 Extract\nRaw stream snapshots]
     B --> C[🧹 Transform\nClean + enrich features]
-    C --> D[📦 Load\nAnalytics CSV tables]
-    D --> E[📊 Tableau]
-    D --> F[📓 Jupyter Notebook]
-    G[⏰ Apache Airflow DAG] --> B
-    G --> C
-    G --> D
+  C --> D[📦 Load\nAnalytics CSV tables]
+  D --> E[🗄️ Load latest batch\ninto ClickHouse]
+  D --> F[📊 BI / Dashboard Layer]
+  D --> H[📓 Jupyter Notebook]
+  E --> F
+  E --> H
+  G[⏰ Apache Airflow DAG] --> B
+  G --> C
+  G --> D
+  G --> E
 ```
 
 ---
 
-## 📸 Demo / screenshots section
+## 📸 Demo / screenshots
 
-```md
-![Airflow DAG Run](assets/dags_screenshot.png)
-![Tableau Dashboard](assets/tableau-dashboard.png)
-```
+<p align="center">
+  <img src="assets/dags_screenshot.png" alt="Airflow DAG screenshot" width="100%" />
+</p>
+
+Current screenshot: Airflow DAG view for the Twitch pipeline.
 
 ---
 
@@ -124,6 +129,17 @@ Generated outputs include:
 - `maturity_summary.csv`
 - `fastest_growing_streams.csv`
 
+### 4) `clickhouse_load` — store the latest analytical batch in ClickHouse
+File: `src/clickhouse_loader.py`
+
+What happens here:
+- connects to the local ClickHouse service configured in Docker Compose
+- creates the `twitch` database if it does not exist
+- creates the `twitch.stream_snapshots_enriched` table if it does not exist
+- selects only the newest `collected_at` batch from the processed CSV
+- inserts that batch into ClickHouse
+- skips the load if the same batch is already present, so repeated runs do not duplicate the latest snapshot set
+
 ---
 
 ## 📁 Project structure
@@ -136,6 +152,7 @@ twitch-project/
 │   ├── extract.py                # API extraction and raw CSV storage
 │   ├── transform.py              # data cleaning + feature engineering
 │   ├── load.py                   # analytical aggregations / outputs
+│   ├── clickhouse_loader.py      # latest-batch load into ClickHouse
 │   └── twitch_api.py             # Twitch API auth + request helpers
 ├── data/
 │   ├── raw/                      # raw appended snapshots
@@ -161,7 +178,7 @@ twitch-project/
 | API access | `requests`, `python-dotenv` |
 | Orchestration | `Apache Airflow 3.2` |
 | Local infra | `Docker Compose`, `PostgreSQL`, `ClickHouse` |
-| Exploration / visualization | `Jupyter Notebook`, `Tableau` |
+| Exploration / visualization | `Jupyter Notebook`, `BI dashboard` |
 
 ---
 
@@ -199,9 +216,17 @@ Then fill in your credentials inside `.env`:
 TWITCH_CLIENT_ID=your_client_id_here
 TWITCH_CLIENT_SECRET=your_client_secret_here
 AIRFLOW_UID=50000
+FERNET_KEY=replace_with_your_fernet_key
+CLICKHOUSE_HOST=clickhouse
+CLICKHOUSE_PORT=8123
+CLICKHOUSE_USER=twitch_app
+CLICKHOUSE_PASSWORD=change_me_clickhouse
+CLICKHOUSE_DATABASE=twitch
 ```
 
 > 💡 You can create Twitch credentials in the [Twitch Developer Console](https://dev.twitch.tv/console).
+>
+> 💡 `CLICKHOUSE_HOST=clickhouse` is correct for Airflow and other containers running inside Docker Compose.
 
 ### 3. Install Python dependencies
 
@@ -235,7 +260,7 @@ Inside the UI:
 This will execute the ETL flow:
 
 ```text
-collect_streams_to_csv → transform_streams_csv → build_analytics_outputs
+collect_streams_to_csv → transform_streams_csv → build_analytics_outputs → load_processed_to_clickhouse
 ```
 
 ### Option B — Run the steps manually from Python
@@ -255,6 +280,11 @@ poetry run python -c "from src.transform import transform_raw_snapshots; transfo
 poetry run python -c "from src.load import load_analytics_outputs; load_analytics_outputs()"
 ```
 
+#### Load the newest analytical batch into ClickHouse
+```bash
+poetry run python -c "from src.clickhouse_loader import load_latest_batch_to_clickhouse; load_latest_batch_to_clickhouse()"
+```
+
 #### Quick smoke run
 ```bash
 poetry run python main.py
@@ -264,7 +294,12 @@ poetry run python main.py
 
 ## 📊 Analytics outputs
 
-The project generates several CSV tables that are immediately useful for BI dashboards.
+The project now produces two analytics layers:
+
+1. CSV summary tables in `data/analytics/` for quick inspection and dashboard imports.
+2. A ClickHouse fact table named `twitch.stream_snapshots_enriched` that stores the newest processed snapshot batch.
+
+The CSV outputs are immediately useful for BI dashboards or a lightweight hosted report.
 
 | Output file | What it shows | Typical visualization |
 |------------|----------------|-----------------------|
@@ -280,20 +315,26 @@ These files live in:
 data/analytics/
 ```
 
+The ClickHouse table is useful for SQL-based exploration, validation queries, and later direct BI connections.
+
 ---
 
-## 📈 Using the outputs in Tableau
+## 📈 Dashboard layer
 
-This project is intentionally designed so the final output can be plugged into a BI tool.
+This project is intentionally designed so the final output can feed a BI tool or a hosted online dashboard.
 
-### Typical workflow:
-1. Open **Tableau Public** or **Tableau Desktop**
-2. Click **Connect → Text file**
-3. Select one of the CSV files from `data/analytics/`
-4. Drag dimensions and measures to build your chart
-5. Combine several sheets into a dashboard
+Planned delivery options:
+1. Use the CSV outputs in `data/analytics/` for quick dashboard prototyping.
+2. Query `twitch.stream_snapshots_enriched` directly for richer SQL-based analysis.
+3. Publish a hosted dashboard and add its public link to this README.
 
-### Dashboard ideas for a portfolio presentation:
+Recommended place for the public dashboard link:
+
+```md
+Dashboard: [Live demo](https://your-dashboard-link-here)
+```
+
+Possible dashboard themes:
 - 🎮 **Top Games Dashboard** — average viewers and peak viewers by game
 - 🌍 **Language Overview** — distribution of audiences by stream language
 - ⏰ **Best Streaming Hours** — viewer activity trend by `snapshot_hour_utc`
